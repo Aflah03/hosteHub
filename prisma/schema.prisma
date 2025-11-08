@@ -1,0 +1,319 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  OWNER
+  ADMIN
+}
+
+enum MessCutStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CustomRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DuesStatus {
+  PAID
+  PENDING
+  OVERDUE
+}
+
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+model User {
+  id                String              @id @default(uuid())
+  email             String              @unique
+  password          String
+  name              String
+  role              Role                @default(STUDENT)
+  phone             String?
+  avatar            String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  student           Student?
+  owner             Owner?
+  admin             Admin?
+  
+  @@map("users")
+}
+
+model Admin {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("admins")
+}
+
+model Hostel {
+  id                String              @id @default(uuid())
+  name              String
+  address           String
+  city              String
+  state             String
+  pincode           String
+  phone             String
+  email             String?
+  totalRooms        Int
+  occupiedRooms     Int                 @default(0)
+  facilities        String[]            // ["WiFi", "Gym", "Laundry"]
+  images            String[]
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  messes            Mess[]
+  students          Student[]
+  laundryServices   LaundryService[]
+  cleaningServices  CleaningService[]
+  
+  @@map("hostels")
+}
+
+model Owner {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  messes            Mess[]
+  
+  @@map("owners")
+}
+
+model Mess {
+  id                String              @id @default(uuid())
+  name              String
+  description       String?
+  ownerId           String
+  owner             Owner               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  hostelId          String
+  hostel            Hostel              @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  monthlyPrice      Float
+  breakfastPrice    Float?
+  lunchPrice        Float?
+  dinnerPrice       Float?
+  isVeg             Boolean             @default(false)
+  isNonVeg          Boolean             @default(false)
+  rating            Float               @default(0)
+  totalReviews      Int                 @default(0)
+  capacity          Int
+  currentStudents   Int                 @default(0)
+  isActive          Boolean             @default(true)
+  images            String[]
+  features          String[]            // ["Hygienic", "Home-style cooking"]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  menuItems         MenuItem[]
+  subscriptions     MessSubscription[]
+  messCuts          MessCut[]
+  customRequests    CustomRequest[]
+  feedback          Feedback[]
+  
+  @@map("messes")
+}
+
+model MenuItem {
+  id                String              @id @default(uuid())
+  messId            String
+  mess              Mess                @relation(fields: [messId], references: [id], onDelete: Cascade)
+  day               String              // "Monday", "Tuesday", etc.
+  mealType          String              // "Breakfast", "Lunch", "Dinner"
+  items             String[]            // ["Poha", "Tea", "Banana"]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@unique([messId, day, mealType])
+  @@map("menu_items")
+}
+
+model Student {
+  id                String              @id @default(uuid())
+  userId            String              @unique
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hostelId          String
+  hostel            Hostel              @relation(fields: [hostelId], references: [id])
+  roomNumber        String?
+  enrollmentNumber  String              @unique
+  course            String?
+  year              Int?
+  dateOfBirth       DateTime?
+  bloodGroup        String?
+  emergencyContact  String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  subscriptions     MessSubscription[]
+  messCuts          MessCut[]
+  customRequests    CustomRequest[]
+  feedback          Feedback[]
+  dues              Dues[]
+  attendances       Attendance[]
+  
+  @@map("students")
+}
+
+model MessSubscription {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messId            String
+  mess              Mess                @relation(fields: [messId], references: [id], onDelete: Cascade)
+  startDate         DateTime
+  endDate           DateTime?
+  monthlyPrice      Float
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("mess_subscriptions")
+}
+
+model MessCut {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messId            String
+  mess              Mess                @relation(fields: [messId], references: [id], onDelete: Cascade)
+  startDate         DateTime
+  endDate           DateTime
+  reason            String?
+  status            MessCutStatus       @default(PENDING)
+  refundAmount      Float?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("mess_cuts")
+}
+
+model CustomRequest {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messId            String
+  mess              Mess                @relation(fields: [messId], references: [id], onDelete: Cascade)
+  planType          String              // "Veg Only", "High Protein", "Gym Diet", etc.
+  description       String
+  dietaryRestrictions String[]
+  status            CustomRequestStatus @default(PENDING)
+  ownerResponse     String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("custom_requests")
+}
+
+model Feedback {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messId            String
+  mess              Mess                @relation(fields: [messId], references: [id], onDelete: Cascade)
+  rating            Int                 // 1-5
+  comment           String
+  sentiment         Sentiment?
+  sentimentScore    Float?
+  sentimentSummary  String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("feedback")
+}
+
+model Dues {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  description       String              // "Mess Fee - January 2025"
+  amount            Float
+  dueDate           DateTime
+  paidDate          DateTime?
+  status            DuesStatus          @default(PENDING)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("dues")
+}
+
+model Attendance {
+  id                String              @id @default(uuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date              DateTime
+  breakfast         Boolean             @default(false)
+  lunch             Boolean             @default(false)
+  dinner            Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  
+  @@unique([studentId, date])
+  @@map("attendances")
+}
+
+model LaundryService {
+  id                String              @id @default(uuid())
+  hostelId          String
+  hostel            Hostel              @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  pricePerKg        Float
+  washingPrice      Float?
+  ironingPrice      Float?
+  dryCleanPrice     Float?
+  rating            Float               @default(0)
+  phone             String
+  email             String?
+  isActive          Boolean             @default(true)
+  images            String[]
+  features          String[]            // ["Same Day Service", "Pickup & Drop"]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("laundry_services")
+}
+
+model CleaningService {
+  id                String              @id @default(uuid())
+  hostelId          String
+  hostel            Hostel              @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  dailyPrice        Float?
+  weeklyPrice       Float?
+  monthlyPrice      Float?
+  rating            Float               @default(0)
+  phone             String
+  email             String?
+  isActive          Boolean             @default(true)
+  images            String[]
+  services          String[]            // ["Room Cleaning", "Bathroom Cleaning", "Dusting"]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@map("cleaning_services")
+}
